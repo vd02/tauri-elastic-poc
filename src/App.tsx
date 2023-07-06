@@ -1,94 +1,100 @@
-import React, { useState } from "react";
-import cors from "cors";
-import { ToastContainer, toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-import "./App.css";
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+axios.defaults.baseURL = 'http://localhost:3001';
 
 const App: React.FC = () => {
-  const [inputValue, setInputValue] = useState("");
   const [data, setData] = useState<any[]>([]);
+  const [newTitle, setNewTitle] = useState('');
 
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setInputValue(event.target.value);
+  useEffect(() => {
+    fetchData();
+    createIndex();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const response = await axios.get('/api/data');
+      setData(response.data);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
   };
 
-  const handleGoButtonClick = () => {
-    var data = {
-      add: {
-        doc: {
-          id: inputValue,
-          title: "Doc 1"
-        }
-      }
-    };
-
-    var jsonData = JSON.stringify(data);
-    var solrUrl = "http://localhost:8983/solr/techproducts/update?commit=true";
-
-    fetch(solrUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: jsonData
-    })
-      .then(function(response) {
-        if (response.ok) {
-          toast.success("Value inserted"); // Show success toast message
-          console.log("Data posted successfully to Solr");
-        } else {
-          toast.error("Failed to insert value"); // Show error toast message
-          console.log("Failed to post data to Solr");
-        }
-      })
-      .catch(function(error) {
-        console.log("Error:", error);
-      });
+  const createData = () => {
+    return new Promise((resolve, reject) => {
+      axios
+        .post('/api/data', { title: newTitle })
+        .then(() => {
+          setNewTitle('');
+          setTimeout(() => {
+            resolve(fetchData());
+          }, 700);
+        })
+        .catch((error) => {
+          reject(error);
+        });
+    });
   };
 
-  const handleGetDataClick = () => {
-    var solrUrl = "http://localhost:8983/solr/techproducts/select?q=*%3A*&rows=100";
+  const createIndex = () => {
+    return new Promise((resolve, reject) => {
+      axios
+        .put('/api/create-index')
+        .then(() => {
+          console.log('Index created successfully');
+          resolve(true);
+        })
+        .catch((error) => {
+          reject(error);
+        });
+    });
+  };
 
-    fetch(solrUrl)
-      .then(response => response.json())
-      .then(result => {
-        setData(result.response.docs);
-        toast.success("Data retrieved successfully"); // Show success toast message
-      })
-      .catch(error => {
-        toast.error("Failed to retrieve data"); // Show error toast message
-        console.log("Error:", error);
-      });
+  const deleteData = (id: string) => {
+    return new Promise((resolve, reject) => {
+      axios
+        .delete(`/api/data/${id}`)
+        .then(() => {
+          setTimeout(() => {
+            resolve(fetchData());
+          }, 700);
+        })
+        .catch((error) => {
+          reject(error);
+        });
+    });
   };
 
   return (
-    <div className="container">
-      <h1>Apache Solr + Tauri POC</h1>
-      <div className="input-container">
-        <input type="text" value={inputValue} onChange={handleInputChange} />
-        <button onClick={handleGoButtonClick}>Go</button>
+    <div>
+      <h1>Elasticsearch POC</h1>
+      <div>
+        <h2>Data:</h2>
+        <ul>
+          {data.map((item) => (
+            <>
+              <li key={item._id}>
+                {item._source.title}<span> -- </span>
+                <button onClick={() => deleteData(item._id)}>Delete</button>
+              </li>
+              <div>----------------------------------------------</div>
+            </>
+          ))}
+        </ul>
       </div>
-      <button style={{alignSelf:"center"}} onClick={handleGetDataClick}>Get Data</button>
-      <ul className="data-list">
-        {data.map(doc => (
-          <li key={doc.id}>
-            <h3>{doc.title}</h3>
-            <ul>
-              {Object.keys(doc).map(key => (
-                <li key={key}>
-                  <strong>{key}: </strong> {doc[key]}
-                </li>
-              ))}
-            </ul>
-          </li>
-        ))}
-      </ul>
-      <ToastContainer position="top-center" autoClose={3000} hideProgressBar={true} limit={1} />
+      <div>
+        <h2>Create Data:</h2>
+        <input
+          type="text"
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+        />
+        <button onClick={() => createData()}>
+          Create
+        </button>
+      </div>
     </div>
   );
 };
-
-// Enable CORS in the Express server
-cors();
 
 export default App;
